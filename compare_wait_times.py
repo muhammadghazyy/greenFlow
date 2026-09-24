@@ -1,5 +1,5 @@
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from controller_adaptive import (
@@ -18,8 +18,14 @@ from controller_flat import (
 )
 
 LOG_DIR = Path("logs")
-CSV_PATH = LOG_DIR / "traffic_wait_comparison.csv"
-MD_PATH = LOG_DIR / "traffic_wait_summary.md"
+
+
+def simulation_timestamp():
+    return datetime.now(timezone(timedelta(hours=7))).strftime("%Y%m%d%H%M%S")
+
+
+CSV_PATH = LOG_DIR / f"traffic_wait_comparison._{simulation_timestamp()}.csv"
+MD_PATH = LOG_DIR / f"traffic_wait_summary._{simulation_timestamp()}.md"
 
 
 def cycle_wait_time(traffic, green_road, green_duration, current_index, duration_fn, road_selector):
@@ -138,28 +144,51 @@ def write_csv(rows):
         writer.writerows(rows)
 
 
+def format_seconds(value):
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.1f}"
+
+
+def average_wait_for_strategy(strategy_averages, strategy, road):
+    stats = strategy_averages.get(strategy, {}).get(road, {})
+    total = stats.get("total", 0)
+    count = stats.get("count", 0)
+    return total / count if count else 0
+
+
 def write_markdown(rows):
     strategy_totals = {}
+    strategy_averages = {}
 
     for row in rows:
-        if row["cycle"] != "TOTAL":
+        if row["cycle"] == "TOTAL":
+            strategy_totals[row["strategy"]] = {
+                "total_wait": row["total_wait_this_cycle_seconds"],
+                "A_total": row["A_total_wait_seconds"],
+                "B_total": row["B_total_wait_seconds"],
+                "C_total": row["C_total_wait_seconds"],
+            }
             continue
 
-        strategy_totals[row["strategy"]] = {
-            "total_wait": row["total_wait_this_cycle_seconds"],
-            "A_total": row["A_total_wait_seconds"],
-            "B_total": row["B_total_wait_seconds"],
-            "C_total": row["C_total_wait_seconds"],
-        }
+        strategy = row["strategy"]
+        strategy_averages.setdefault(strategy, {road: {"total": 0, "count": 0} for road in ROAD_ORDER})
+
+        for road in ROAD_ORDER:
+            wait = row[f"{road}_wait_seconds"]
+            if wait > 0:
+                strategy_averages[strategy][road]["total"] += wait
+                strategy_averages[strategy][road]["count"] += 1
 
     adaptive_total = strategy_totals.get("adaptive", {}).get("total_wait", 0)
     flat_total = strategy_totals.get("flat_30s", {}).get("total_wait", 0)
-    adaptive_a = strategy_totals.get("adaptive", {}).get("A_total", 0)
-    adaptive_b = strategy_totals.get("adaptive", {}).get("B_total", 0)
-    adaptive_c = strategy_totals.get("adaptive", {}).get("C_total", 0)
-    flat_a = strategy_totals.get("flat_30s", {}).get("A_total", 0)
-    flat_b = strategy_totals.get("flat_30s", {}).get("B_total", 0)
-    flat_c = strategy_totals.get("flat_30s", {}).get("C_total", 0)
+
+    adaptive_a_avg = average_wait_for_strategy(strategy_averages, "adaptive", "A")
+    adaptive_b_avg = average_wait_for_strategy(strategy_averages, "adaptive", "B")
+    adaptive_c_avg = average_wait_for_strategy(strategy_averages, "adaptive", "C")
+    flat_a_avg = average_wait_for_strategy(strategy_averages, "flat_30s", "A")
+    flat_b_avg = average_wait_for_strategy(strategy_averages, "flat_30s", "B")
+    flat_c_avg = average_wait_for_strategy(strategy_averages, "flat_30s", "C")
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     markdown = []
@@ -171,7 +200,7 @@ def write_markdown(rows):
     markdown.append("- Fixed A -> B -> C signal order")
     markdown.append("- Adaptive strategy adjusts green duration using traffic count")
     markdown.append("- Flat strategy uses a constant 30-second green duration")
-    markdown.append("- Wait estimate is based on the time until each non-green road reaches its next green phase in the rotation")
+    markdown.append("- Per-road wait is the average wait while that road is red before its next green phase")
     markdown.append("")
     markdown.append("## Result Summary")
     markdown.append("")
@@ -179,15 +208,15 @@ def write_markdown(rows):
     markdown.append(f"- Flat 30s total wait: {flat_total}s")
     markdown.append(f"- Difference: {flat_total - adaptive_total}s")
     markdown.append("")
-    markdown.append("### Adaptive road totals")
-    markdown.append(f"- A: {adaptive_a}s")
-    markdown.append(f"- B: {adaptive_b}s")
-    markdown.append(f"- C: {adaptive_c}s")
+    markdown.append("### Adaptive average red-light wait per road")
+    markdown.append(f"- A: {format_seconds(adaptive_a_avg)}s")
+    markdown.append(f"- B: {format_seconds(adaptive_b_avg)}s")
+    markdown.append(f"- C: {format_seconds(adaptive_c_avg)}s")
     markdown.append("")
-    markdown.append("### Flat 30s road totals")
-    markdown.append(f"- A: {flat_a}s")
-    markdown.append(f"- B: {flat_b}s")
-    markdown.append(f"- C: {flat_c}s")
+    markdown.append("### Flat 30s average red-light wait per road")
+    markdown.append(f"- A: {format_seconds(flat_a_avg)}s")
+    markdown.append(f"- B: {format_seconds(flat_b_avg)}s")
+    markdown.append(f"- C: {format_seconds(flat_c_avg)}s")
     markdown.append("")
     markdown.append("## CSV Output")
     markdown.append(f"- File: [{CSV_PATH.name}]({CSV_PATH})")
@@ -197,11 +226,12 @@ def write_markdown(rows):
 
     for row in rows:
         if row["cycle"] == "TOTAL":
-            markdown.append(f"### {row['strategy']} total")
+            strategy = row["strategy"]
+            markdown.append(f"### {strategy} total")
             markdown.append(f"- Total wait: {row['total_wait_this_cycle_seconds']}s")
-            markdown.append(f"- A total wait: {row['A_total_wait_seconds']}s")
-            markdown.append(f"- B total wait: {row['B_total_wait_seconds']}s")
-            markdown.append(f"- C total wait: {row['C_total_wait_seconds']}s")
+            markdown.append(f"- A average wait while red: {format_seconds(average_wait_for_strategy(strategy_averages, strategy, 'A'))}s")
+            markdown.append(f"- B average wait while red: {format_seconds(average_wait_for_strategy(strategy_averages, strategy, 'B'))}s")
+            markdown.append(f"- C average wait while red: {format_seconds(average_wait_for_strategy(strategy_averages, strategy, 'C'))}s")
             markdown.append("")
 
     MD_PATH.write_text("\n".join(markdown), encoding="utf-8")
@@ -209,6 +239,11 @@ def write_markdown(rows):
 
 def main():
     LOG_DIR.mkdir(exist_ok=True)
+
+    timestamp = simulation_timestamp()
+    global CSV_PATH, MD_PATH
+    CSV_PATH = LOG_DIR / f"traffic_wait_comparison._{timestamp}.csv"
+    MD_PATH = LOG_DIR / f"traffic_wait_summary._{timestamp}.md"
 
     adaptive_rows = simulate_strategy(
         "adaptive",
