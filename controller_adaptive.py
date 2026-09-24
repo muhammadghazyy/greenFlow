@@ -1,37 +1,43 @@
-ARRIVAL_RATE_A = 0.5
-ARRIVAL_RATE_B = ARRIVAL_RATE_A * 0.25
-ARRIVAL_RATE_C = ARRIVAL_RATE_B * 0.5
-DEPARTURE_RATE = 2.0
-MAX_CYCLES = 10
-ROAD_ORDER = ["A", "B", "C"]
+from scenario_config import get_scenario
 
-initial_traffic = {
-    "A": 36,
-    "B": 3,
-    "C": 6,
-}
+SCENARIO = get_scenario()
+ARRIVAL_RATES = SCENARIO["arrival_rates"]
+DEPARTURE_RATE = SCENARIO["departure_rate"]
+ROAD_ORDER = SCENARIO["roads"]
+initial_traffic = SCENARIO["initial_traffic"]
+
+ARRIVAL_RATE_A = ARRIVAL_RATES["A"]
+ARRIVAL_RATE_B = ARRIVAL_RATES["B"]
+ARRIVAL_RATE_C = ARRIVAL_RATES["C"]
+MAX_CYCLES = 10
 
 def calculate_green_duration(vehicle_count):
     min_green = 5
     max_green = 40
     seconds_per_vehicle = 2
 
+    if vehicle_count <= 0:
+        return 0
+
     green = min_green + (vehicle_count * seconds_per_vehicle)
 
     return min(green, max_green)
 
-def choose_next_road(current_index):
-    """Return the next road in the fixed A -> B -> C rotation."""
-    return ROAD_ORDER[current_index % len(ROAD_ORDER)]
+def choose_next_road(current_index, traffic=None):
+    """Return the next road with traffic, following the fixed rotation."""
+    for offset in range(len(ROAD_ORDER)):
+        road = ROAD_ORDER[(current_index + offset) % len(ROAD_ORDER)]
+        if traffic is None or traffic.get(road, 0) > 0:
+            return road
+    return None
 
 def update_traffic(traffic, green_road, green_duration):
     """Apply simple arrival and departure changes for one green phase."""
     departure = DEPARTURE_RATE * green_duration
 
     arrival_rates = {
-        "A": ARRIVAL_RATE_A,
-        "B": ARRIVAL_RATE_B,
-        "C": ARRIVAL_RATE_C,
+        road: ARRIVAL_RATES[road]
+        for road in ROAD_ORDER
     }
 
     for road in ROAD_ORDER:
@@ -51,8 +57,8 @@ def simulate_cycles():
     current_index = 0
 
     for cycle in range(1, MAX_CYCLES + 1):
-        green_road = choose_next_road(current_index)
-        green_duration = calculate_green_duration(traffic[green_road])
+        green_road = choose_next_road(current_index, traffic)
+        green_duration = calculate_green_duration(traffic[green_road]) if green_road else 0
 
         print(f"--- Cycle {cycle} ---\n")
         print("Traffic before:")
@@ -68,7 +74,8 @@ def simulate_cycles():
 
         print(f"\nGreen duration: {green_duration} seconds")
 
-        traffic = update_traffic(traffic, green_road, green_duration)
+        if green_road:
+            traffic = update_traffic(traffic, green_road, green_duration)
 
         print("\nTraffic after:")
         for road in ROAD_ORDER:

@@ -1,15 +1,15 @@
-ARRIVAL_RATE_A = 0.5
-ARRIVAL_RATE_B = ARRIVAL_RATE_A * 0.25
-ARRIVAL_RATE_C = ARRIVAL_RATE_B * 0.5
-DEPARTURE_RATE = 2.0
-MAX_CYCLES = 10
-ROAD_ORDER = ["A", "B", "C"]
+from scenario_config import get_scenario
 
-initial_traffic = {
-    "A": 36,
-    "B": 3,
-    "C": 6,
-}
+SCENARIO = get_scenario()
+ARRIVAL_RATES = SCENARIO["arrival_rates"]
+DEPARTURE_RATE = SCENARIO["departure_rate"]
+ROAD_ORDER = SCENARIO["roads"]
+initial_traffic = SCENARIO["initial_traffic"]
+
+ARRIVAL_RATE_A = ARRIVAL_RATES["A"]
+ARRIVAL_RATE_B = ARRIVAL_RATES["B"]
+ARRIVAL_RATE_C = ARRIVAL_RATES["C"]
+MAX_CYCLES = 10
 
 def calculate_green_duration(vehicle_count):
     # min_green = 5
@@ -29,9 +29,8 @@ def update_traffic(traffic, green_road, green_duration):
     departure = DEPARTURE_RATE * green_duration
 
     arrival_rates = {
-        "A": ARRIVAL_RATE_A,
-        "B": ARRIVAL_RATE_B,
-        "C": ARRIVAL_RATE_C,
+        road: ARRIVAL_RATES[road]
+        for road in ROAD_ORDER
     }
 
     for road in ROAD_ORDER:

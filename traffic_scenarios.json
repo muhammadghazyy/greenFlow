@@ -1,0 +1,29 @@
+{
+  "active_scenario": "default",
+  "scenarios": {
+    "default": {
+      "roads": ["A", "B", "C"],
+      "initial_traffic": {"A": 36, "B": 3, "C": 6},
+      "arrival_rates": {"A": 0.5, "B": 0.125, "C": 0.0625},
+      "departure_rate": 2.0
+    },
+    "heavy_c": {
+      "roads": ["A", "B", "C"],
+      "initial_traffic": {"A": 8, "B": 55, "C": 96},
+      "arrival_rates": {"A": 0.1, "B": 0.5, "C": 0.46},
+      "departure_rate": 2.0
+    },
+    "heavy_b": {
+      "roads": ["A", "B", "C"],
+      "initial_traffic": {"A": 8, "B": 55, "C": 1},
+      "arrival_rates": {"A": 0.1, "B": 0.2, "C": 0.46},
+      "departure_rate": 2.0
+    },
+    "flat": {
+      "roads": ["A", "B", "C"],
+      "initial_traffic": {"A": 41, "B": 43, "C": 46},
+      "arrival_rates": {"A": 0.31, "B": 0.27, "C": 0.33},
+      "departure_rate": 2.0
+    }
+  }
+}
