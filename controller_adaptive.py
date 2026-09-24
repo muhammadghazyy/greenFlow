@@ -13,7 +13,7 @@ MAX_CYCLES = 10
 
 def calculate_green_duration(vehicle_count):
     min_green = 5
-    max_green = 40
+    max_green = 30
     seconds_per_vehicle = 2
 
     if vehicle_count <= 0:
